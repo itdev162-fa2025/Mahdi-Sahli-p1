@@ -1,62 +1,57 @@
 using Domain;
 using Microsoft.AspNetCore.Mvc;
-using Persistence;
+using Application; // Make sure to include this to access your service
+using Microsoft.Extensions.Logging;
 
-namespace API.Controllers;
-
-[ApiController]
-[Route("[controller]")]
-public class WeatherForecastController : ControllerBase
+namespace API.Controllers
 {
-    private static readonly string[] Summaries = new[]
+    [ApiController]
+    [Route("[controller]")]
+    public class WeatherForecastController : ControllerBase
     {
-        "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-    };
-
-    private readonly ILogger<WeatherForecastController> _logger;
-
-    private readonly DataContext _context;
-
-    public WeatherForecastController(ILogger<WeatherForecastController> logger, DataContext context)
-    {
-        _logger = logger;
-        _context = context;
-    }
-
-    [HttpGet(Name = "GetWeatherForecast")]
-    public IEnumerable<WeatherForecast> Get()
-    {
-        return Enumerable.Range(1, 5).Select(index => new WeatherForecast
+        private static readonly string[] Summaries = new[]
         {
-            Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Summary = Summaries[Random.Shared.Next(Summaries.Length)]
-        })
-        .ToArray();
-    }
-
-    [HttpPost]
-    public ActionResult<WeatherForecast> Create()
-    {
-        // View in your VS Code console - fyi
-        Console.WriteLine($"Database path: {_context.DbPath}");
-        Console.WriteLine("Insert a new WeatherForecast");
-
-        var forecast = new WeatherForecast()
-        {
-            Date = new DateOnly(),
-            TemperatureC = 75,
-            Summary = "Warm"
+            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
         };
 
-        _context.WeatherForecasts.Add(forecast);
-        var success = _context.SaveChanges() > 0;
+        private readonly ILogger<WeatherForecastController> _logger;
+        private readonly IWeatherForecastService _service; // Use the service instead of DataContext
 
-        if (success)
+        public WeatherForecastController(ILogger<WeatherForecastController> logger, IWeatherForecastService service)
         {
-            return forecast;
+            _logger = logger;
+            _service = service; // Inject the service
         }
 
-        throw new Exception("Error creating WeatherForecast");
+        [HttpGet(Name = "GetWeatherForecast")]
+        public ActionResult<IEnumerable<WeatherForecast>> Get()
+        {
+            var forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
+            {
+                Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+                TemperatureC = Random.Shared.Next(-20, 55),
+                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
+            })
+            .ToArray();
+
+            // You can also choose to fetch forecasts from the database using the service
+            // var forecasts = _service.GetAll(); 
+
+            return Ok(forecasts);
+        }
+
+        [HttpPost]
+        public ActionResult<WeatherForecast> Create([FromBody] WeatherForecast forecast) // Accept the forecast from the request body
+        {
+            if (forecast == null)
+            {
+                return BadRequest("Forecast cannot be null.");
+            }
+
+            // Using the service to add the forecast
+            _service.Add(forecast);
+
+            return CreatedAtAction(nameof(Get), new { id = forecast.Id }, forecast);
+        }
     }
 }
